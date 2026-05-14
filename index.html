@@ -1,1 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCPE EDITOR - Advanced Addon Maker</title>
+    <!-- JSZip and FileSaver for actual mod exporting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --bg-color: #050a06;
+            --panel-bg: #0d170f;
+            --accent-green: #00ff41;
+            --accent-glow: #00ff4166;
+            --text-main: #e0f2e9;
+            --text-dim: #7a9c85;
+            --border: #1a2e1d;
+        }
 
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Consolas', 'Courier New', monospace;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar Workspace */
+        #sidebar {
+            width: 280px;
+            background-color: var(--panel-bg);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            box-shadow: 2px 0 15px rgba(0, 0, 0, 0.5);
+        }
+
+        .header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            color: var(--accent-green);
+            text-shadow: 0 0 10px var(--accent-glow);
+            letter-spacing: 2px;
+        }
+
+        .workspace-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+
+        .workspace-item {
+            background: rgba(0, 255, 65, 0.05);
+            border-left: 3px solid var(--accent-green);
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 0 4px 4px 0;
+            cursor: pointer;
+            transition: 0.2s;
+            word-break: break-all;
+        }
+
+        .workspace-item:hover {
+            background: rgba(0, 255, 65, 0.15);
+        }
+
+        .workspace-item i {
+            color: var(--accent-green);
+            margin-right: 8px;
+        }
+
+        /* Main Editor Area */
+        #main-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .top-bar {
+            height: 65px;
+            background-color: var(--panel-bg);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 30px;
+        }
+
+        .btn-export {
+            background: transparent;
+            color: var(--accent-green);
+            border: 1px solid var(--accent-green);
+            padding: 10px 20px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-export:hover {
+            background: var(--accent-green);
+            color: var(--bg-color);
+            box-shadow: 0 0 15px var(--accent-glow);
+        }
+
+        #editor-content {
+            flex: 1;
+            padding: 40px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .form-container {
+            background: var(--panel-bg);
+            border: 1px solid var(--border);
+            padding: 30px;
+            width: 100%;
+            max-width: 600px;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.05);
+            display: none;
+        }
+
+        .form-container h2 {
+            margin-bottom: 20px;
+            color: var(--accent-green);
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            width: 100%;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-dim);
+            font-size: 0.9rem;
+        }
+
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%;
+            background: var(--bg-color);
+            border: 1px solid var(--border);
+            color: var(--accent-green);
+            padding: 12px;
+            border-radius: 4px;
+            outline: none;
+            transition: border 0.3s;
+            font-size: 1rem;
+        }
+
+        .form-group input:focus, .form-group textarea:focus {
+            border-color: var(--accent-green);
+            box-shadow: 0 0 8px var(--accent-glow);
+        }
+
+        .btn-save {
+            background: var(--accent-green);
+            color: var(--bg-color);
+            border: none;
+            padding: 12px;
+            width: 100%;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: 0.3s;
+        }
+
+        .btn-save:hover {
+            box-shadow: 0 0 15px var(--accent-glow);
+            transform: translateY(-2px);
+        }
+
+        /* Floating Action Button (+) */
+        .fab-container {
+            position: absolute;
+            bottom: 40px;
+            right: 40px;
+            display: flex;
+            flex-direction: column-reverse;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .fab {
+            width: 65px;
+            height: 65px;
+            background: var(--accent-green);
+            color: var(--bg-color);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            cursor: pointer;
+            box-shadow: 0 0 20px var(--accent-glow);
+            transition: transform 0.3s;
+            border: none;
+            z-index: 10;
+        }
+
+        .fab:hover {
+            transform: rotate(90deg) scale(1.1);
+        }
+
+        .fab-menu {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(20px);
+            transition: all 0.3s ease;
+        }
+
+        .fab-container:hover .fab-menu {
+            opacity: 1;
+            pointer-events: all;
+            transform: translateY(0);
+        }
+
+        .fab-item {
+            width: 50px;
+            height: 50px;
+            background: var(--panel-bg);
+            color: var(--accent-green);
+            border: 1px solid var(--accent-green);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: 0.2s;
+            position: relative;
+        }
+
+        .fab-item::before {
+            content: attr(data-tooltip);
+            position: absolute;
+            right: 60px;
+            background: var(--panel-bg);
+            color: var(--text-main);
+            padding: 5px 10px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            font-size: 0.9rem;
+            opacity: 0;
+            pointer-events: none;
+            transition: 0.2s;
+            white-space: nowrap;
+        }
+
+        .fab-item:hover {
+            background: var(--accent-green);
+            color: var(--bg-color);
+        }
+
+        .fab-item:hover::before {
+            opacity: 1;
+        }
+
+        /* Initial Placeholder */
+        #welcome-screen {
+            text-align: center;
+            color: var(--text-dim);
+        }
+        #welcome-screen i {
+            font-size: 4rem;
+            color: var(--accent-green);
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <div id="sidebar">
+        <div class="header">
+            <h1><i class="fa-solid fa-cube"></i> MCPE EDITOR</h1>
+            <p style="font-size: 0.75rem; color: var(--text-dim); margin-top: 5px;">SUPER ADVANCED V1.0</p>
+        </div>
+        <div class="workspace-list" id="workspace-list">
+            <!-- Workspace items generated by JS -->
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div id="main-area">
+        <div class="top-bar">
+            <div>
+                <span style="color: var(--text-dim);">Current Workspace: </span>
+                <strong style="color: var(--accent-green);">Untitled_Addon</strong>
+            </div>
+            <button class="btn-export" onclick="exportAddon()">
+                <i class="fa-solid fa-download"></i> EXPORT .MCADDON
+            </button>
+        </div>
+
+        <div id="editor-content">
+            
+            <div id="welcome-screen">
+                <i class="fa-solid fa-code"></i>
+                <h2>WORKSPACE INITIALIZED</h2>
+                <p>Use the '+' button in the bottom right to create Items, Recipes, Scripts, or UI.</p>
+            </div>
+
+            <!-- Item Form -->
+            <div id="form-item" class="form-container">
+                <h2><i class="fa-solid fa-sword"></i> Create Custom Item</h2>
+                <div class="form-group">
+                    <label>Identifier (e.g., custom:ruby_sword)</label>
+                    <input type="text" id="item-id" placeholder="custom:my_item">
+                </div>
+                <div class="form-group">
+                    <label>In-Game Display Name</label>
+                    <input type="text" id="item-name" placeholder="Ruby Sword">
+                </div>
+                <div class="form-group">
+                    <label>Category</label>
+                    <select id="item-category">
+                        <option value="Equipment">Equipment</option>
+                        <option value="Items">Items</option>
+                        <option value="Nature">Nature</option>
+                    </select>
+                </div>
+                <button class="btn-save" onclick="saveData('item')">Save to Workspace</button>
+            </div>
+
+            <!-- Recipe Form -->
+            <div id="form-recipe" class="form-container">
+                <h2><i class="fa-solid fa-hammer"></i> Create Shapeless Recipe</h2>
+                <div class="form-group">
+                    <label>Recipe Identifier (e.g., custom:ruby_sword_recipe)</label>
+                    <input type="text" id="recipe-id" placeholder="custom:my_recipe">
+                </div>
+                <div class="form-group">
+                    <label>Result Item Identifier</label>
+                    <input type="text" id="recipe-result" placeholder="custom:my_item">
+                </div>
+                <div class="form-group">
+                    <label>Ingredients (Comma separated identifiers)</label>
+                    <input type="text" id="recipe-ingredients" placeholder="minecraft:stick, minecraft:diamond">
+                </div>
+                <button class="btn-save" onclick="saveData('recipe')">Save to Workspace</button>
+            </div>
+
+            <!-- Script Form -->
+            <div id="form-script" class="form-container">
+                <h2><i class="fa-brands fa-js"></i> Create Bedrock Script</h2>
+                <div class="form-group">
+                    <label>File Name</label>
+                    <input type="text" id="script-id" value="main.js">
+                </div>
+                <div class="form-group">
+                    <label>JavaScript Code (@minecraft/server)</label>
+                    <textarea id="script-code" rows="10">import { world } from "@minecraft/server";&#10;&#10;world.afterEvents.playerSpawn.subscribe((event) => {&#10;    event.player.sendMessage("§aWelcome generated by MCPE EDITOR!");&#10;});</textarea>
+                </div>
+                <button class="btn-save" onclick="saveData('script')">Save to Workspace</button>
+            </div>
+
+            <!-- UI Form -->
+            <div id="form-ui" class="form-container">
+                <h2><i class="fa-solid fa-layer-group"></i> Create JSON UI Screen</h2>
+                <div class="form-group">
+                    <label>UI File Name (e.g., custom_screen.json)</label>
+                    <input type="text" id="ui-id" placeholder="custom_screen.json">
+                </div>
+                <div class="form-group">
+                    <label>Raw JSON Code</label>
+                    <textarea id="ui-code" rows="10">{&#10;  "namespace": "custom_ui",&#10;  "main_screen": {&#10;    "type": "panel",&#10;    "controls": []&#10;  }&#10;}</textarea>
+                </div>
+                <button class="btn-save" onclick="saveData('ui')">Save to Workspace</button>
+            </div>
+
+        </div>
+
+        <!-- FAB Menu -->
+        <div class="fab-container">
+            <button class="fab"><i class="fa-solid fa-plus"></i></button>
+            <div class="fab-menu">
+                <div class="fab-item" data-tooltip="JSON UI" onclick="showForm('ui')"><i class="fa-solid fa-layer-group"></i></div>
+                <div class="fab-item" data-tooltip="Script" onclick="showForm('script')"><i class="fa-brands fa-js"></i></div>
+                <div class="fab-item" data-tooltip="Recipe" onclick="showForm('recipe')"><i class="fa-solid fa-hammer"></i></div>
+                <div class="fab-item" data-tooltip="Item" onclick="showForm('item')"><i class="fa-solid fa-sword"></i></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- WORKSPACE DATA MANAGER ---
+        const workspace = {
+            name: "MCPE_Editor_Addon",
+            items: [],
+            recipes: [],
+            scripts: [],
+            uis: []
+        };
+
+        // --- UI NAVIGATION LOGIC ---
+        function showForm(type) {
+            document.getElementById('welcome-screen').style.display = 'none';
+            document.querySelectorAll('.form-container').forEach(el => el.style.display = 'none');
+            document.getElementById('form-' + type).style.display = 'block';
+        }
+
+        function updateSidebar() {
+            const list = document.getElementById('workspace-list');
+            list.innerHTML = ''; // clear
+
+            const icons = { item: 'fa-sword', recipe: 'fa-hammer', script: 'fa-js', ui: 'fa-layer-group' };
+
+            ['items', 'recipes', 'scripts', 'uis'].forEach(category => {
+                workspace[category].forEach(entry => {
+                    const el = document.createElement('div');
+                    el.className = 'workspace-item';
+                    const iconName = icons[category.slice(0, -1)] || 'fa-file';
+                    el.innerHTML = `<i class="fa-solid ${iconName}"></i> ${entry.id}`;
+                    list.appendChild(el);
+                });
+            });
+        }
+
+        // --- DATA SAVING LOGIC ---
+        function saveData(type) {
+            if (type === 'item') {
+                const id = document.getElementById('item-id').value;
+                const name = document.getElementById('item-name').value;
+                const category = document.getElementById('item-category').value;
+                if(!id) return alert("Identifier is required!");
+                workspace.items.push({ id, name, category });
+            } 
+            else if (type === 'recipe') {
+                const id = document.getElementById('recipe-id').value;
+                const result = document.getElementById('recipe-result').value;
+                const ingredients = document.getElementById('recipe-ingredients').value;
+                if(!id || !result) return alert("Identifier and Result are required!");
+                workspace.recipes.push({ id, result, ingredients: ingredients.split(',').map(s => s.trim()) });
+            }
+            else if (type === 'script') {
+                const id = document.getElementById('script-id').value;
+                const code = document.getElementById('script-code').value;
+                if(!id) return alert("File name required!");
+                workspace.scripts.push({ id, code });
+            }
+            else if (type === 'ui') {
+                const id = document.getElementById('ui-id').value;
+                const code = document.getElementById('ui-code').value;
+                if(!id) return alert("File name required!");
+                workspace.uis.push({ id, code });
+            }
+
+            // Clear inputs for next time
+            document.querySelectorAll('input:not(#script-id)').forEach(el => el.value = '');
+            
+            updateSidebar();
+            alert(`Saved ${type} to workspace successfully!`);
+        }
+
+        // --- UUID GENERATOR FOR MINECRAFT MANIFESTS ---
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        // --- EXPORT LOGIC (JSZIP + FILESAVER) ---
+        async function exportAddon() {
+            if(workspace.items.length === 0 && workspace.recipes.length === 0 && workspace.scripts.length === 0 && workspace.uis.length === 0) {
+                return alert("Workspace is empty! Create something first.");
+            }
+
+            const zip = new JSZip();
+
+            // Structure: 
+            // MyAddon_BP (Behavior Pack)
+            // MyAddon_RP (Resource Pack)
+            const bp = zip.folder(workspace.name + "_BP");
+            const rp = zip.folder(workspace.name + "_RP");
+
+            // --- BEHAVIOR PACK MANIFEST ---
+            const bpManifest = {
+                format_version: 2,
+                header: {
+                    name: "§aMCPE EDITOR BP",
+                    description: "Behavior Pack generated by super advanced MCPE EDITOR.",
+                    uuid: generateUUID(),
+                    version: [1, 0, 0],
+                    min_engine_version: [1, 19, 0]
+                },
+                modules: [{
+                    type: "data",
+                    uuid: generateUUID(),
+                    version: [1, 0, 0]
+                }]
+            };
+
+            // If we have scripts, inject @minecraft/server dependency into BP Manifest
+            if(workspace.scripts.length > 0) {
+                bpManifest.modules.push({
+                    type: "script",
+                    language: "javascript",
+                    uuid: generateUUID(),
+                    entry: "scripts/main.js",
+                    version: [1, 0, 0]
+                });
+                bpManifest.dependencies = [{
+                    module_name: "@minecraft/server",
+                    version: "1.0.0"
+                }];
+            }
+            bp.file("manifest.json", JSON.stringify(bpManifest, null, 2));
+
+
+            // --- RESOURCE PACK MANIFEST ---
+            const rpManifest = {
+                format_version: 2,
+                header: {
+                    name: "§aMCPE EDITOR RP",
+                    description: "Resource Pack generated by super advanced MCPE EDITOR.",
+                    uuid: generateUUID(),
+                    version: [1, 0, 0],
+                    min_engine_version: [1, 19, 0]
+                },
+                modules: [{
+                    type: "resources",
+                    uuid: generateUUID(),
+                    version: [1, 0, 0]
+                }]
+            };
+            rp.file("manifest.json", JSON.stringify(rpManifest, null, 2));
+
+
+            // --- GENERATE ITEMS ---
+            if(workspace.items.length > 0) {
+                const bpItems = bp.folder("items");
+                workspace.items.forEach(item => {
+                    const itemJson = {
+                        format_version: "1.16.100",
+                        "minecraft:item": {
+                            description: {
+                                identifier: item.id,
+                                category: item.category
+                            },
+                            components: {
+                                "minecraft:display_name": { value: item.name }
+                            }
+                        }
+                    };
+                    const filename = item.id.replace(':', '_') + ".json";
+                    bpItems.file(filename, JSON.stringify(itemJson, null, 2));
+                });
+            }
+
+            // --- GENERATE RECIPES ---
+            if(workspace.recipes.length > 0) {
+                const bpRecipes = bp.folder("recipes");
+                workspace.recipes.forEach(recipe => {
+                    // Minecraft Shapeless Recipe format
+                    const recipeJson = {
+                        format_version: "1.12.0",
+                        "minecraft:recipe_shapeless": {
+                            description: { identifier: recipe.id },
+                            tags: ["crafting_table"],
+                            ingredients: recipe.ingredients.map(ing => ({ item: ing })),
+                            result: { item: recipe.result }
+                        }
+                    };
+                    const filename = recipe.id.replace(':', '_') + ".json";
+                    bpRecipes.file(filename, JSON.stringify(recipeJson, null, 2));
+                });
+            }
+
+            // --- GENERATE SCRIPTS ---
+            if(workspace.scripts.length > 0) {
+                const bpScripts = bp.folder("scripts");
+                workspace.scripts.forEach(script => {
+                    bpScripts.file(script.id, script.code);
+                });
+            }
+
+            // --- GENERATE UI ---
+            if(workspace.uis.length > 0) {
+                const rpUI = rp.folder("ui");
+                workspace.uis.forEach(ui => {
+                    rpUI.file(ui.id, ui.code);
+                });
+            }
+
+            // --- COMPILE AND DOWNLOAD ---
+            zip.generateAsync({ type: "blob" }).then(function(content) {
+                // By saving as .mcaddon, Minecraft Bedrock will open it natively!
+                saveAs(content, workspace.name + ".mcaddon");
+            });
+        }
+    </script>
+</body>
+</html>
